@@ -19,4 +19,5 @@ This is just a prototype, so here is a list of possible improvements / features 
 * Make default values configurable, parse it with ConfigParser
 * Cover the codebase with tests, where it makes sense
 * Provide proper packaging with setup.py, requirements.txt
-* Make the app asyncronous somehow (domain list retrieving maybe?) 
+* Make the app asyncronous somehow (domain list retrieving maybe?)
+* Store results in some DB instead of file dump

@@ -73,7 +73,7 @@ class DomainAnalyzer(object):
             if 'ui-state-disabled' in page_element.get_attribute('class'):
                 # get next page element and click on it
                 next_page_index = pages.index(page_element) + 1
-                # On the last page this should give IndexError
+                # on the last page this should give IndexError
                 self.logger.info("Moving to page %s", pages[next_page_index].text)
                 pages[next_page_index].click()
                 break
@@ -86,7 +86,7 @@ class DomainAnalyzer(object):
             self.logger.info("Getting domains to check")
             to_check = self.get_domains_to_check(retrieved_domains)
             self.logger.info("Domains to check: %s", to_check)
-            # Metainfo retrieved here
+            # metainfo retrieved here
             for domain in to_check:
                 try:
                     self.metainfo_retriever.retrieve_info(domain)
@@ -107,9 +107,9 @@ class MetainfoRetriever(object):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.chrome_driver = Chrome()
         # enable android browser emulator
-        mobile_emulation = {"deviceName": "Google Nexus 5"}
+        mobile_emulation = {'deviceName': 'Google Nexus 5'}
         chrome_options = ChromeOptions()
-        chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
+        chrome_options.add_experimental_option('mobileEmulation', mobile_emulation)
         self.android_driver = Chrome(chrome_options=chrome_options)
 
     def retrieve_info(self, domain):
@@ -132,6 +132,7 @@ class MetainfoRetriever(object):
             try:
                 driver.get(url)
                 time.sleep(DELAY)
+                # distinguish screenshots by name
                 suffix = '_chrome' if driver == self.chrome_driver else '_android'
                 driver.save_screenshot(os.path.join(RESULTS_DIR, ''.join([domain, suffix])))
             except TimeoutException:
@@ -148,7 +149,7 @@ class MetainfoRetriever(object):
                 metainfo[meta] = self.chrome_driver.\
                     find_element_by_xpath("//meta[@name='{0}']".format(meta)).get_attribute('content')
             except NoSuchElementException:
-                self.logger.info('Element %s not found for url %s', meta, url)
+                self.logger.info("Element %s not found for url %s", meta, url)
         return metainfo
 
 
