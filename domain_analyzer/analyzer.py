@@ -1,11 +1,12 @@
-from selenium.webdriver import Chrome, Android
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-
 import time
 import re
 import logging
 import os
 import json
+
+from selenium.webdriver import Chrome, ChromeOptions
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+
 
 # Main URL
 DOMAINPUNCH_URL = 'https://domainpunch.com/tlds/daily.php'
@@ -39,12 +40,11 @@ class DomainAnalyzer(object):
 
     def get_domains_to_check(self, domains):
         domains_to_check = []
-        # TODO: apply filter func?
         for domain in domains:
             if any(regex.match(domain) for regex in REGEX_LIST):
-                print 'Domain', domain, 'matches regex'
+                self.logger.debug("Domain %s matches regex", domain)
                 if domain in WHITELIST:
-                    print 'Domain', domain, 'exists in whitelist'
+                    self.logger.debug("Domain %s exists in whitelist", domain)
                 else:
                     domains_to_check.append(domain)
         return domains_to_check
@@ -61,7 +61,6 @@ class DomainAnalyzer(object):
     def move_to_next_page(self):
         pages = self.main_driver.find_elements_by_xpath('//*[@id="domtable_paginate"]/span/a')
         for page_element in pages:
-            # print page_element.text
             # if button is dimmed out
             if 'ui-state-disabled' in page_element.get_attribute('class'):
                 # get next page element and click on it
@@ -78,7 +77,7 @@ class DomainAnalyzer(object):
             self.logger.info("Getting domains to check")
             to_check = self.get_domains_to_check(retrieved_domains)
             self.logger.info("Domains to check: %s", to_check)
-            # ...Metainfo retrieved here...
+            # Metainfo retrieved here
             for domain in to_check:
                 try:
                     self.metainfo_retriever.retrieve_info(domain)
@@ -98,7 +97,11 @@ class MetainfoRetriever(object):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.chrome_driver = Chrome()
-        #self.android_driver = Android()
+        # enable android browser emulator
+        mobile_emulation = {"deviceName": "Google Nexus 5"}
+        chrome_options = ChromeOptions()
+        chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
+        self.android_driver = Chrome(chrome_options=chrome_options)
 
     def retrieve_info(self, domain):
         url = ''.join(['http://', domain])
@@ -108,11 +111,12 @@ class MetainfoRetriever(object):
             metainfo_file.write(''.join([json.dumps(metainfo), '\n']))
 
     def get_screenshot(self, url, domain):
-        for driver in [self.chrome_driver]:
+        for driver in [self.chrome_driver, self.android_driver]:
             try:
                 driver.get(url)
                 time.sleep(DELAY)
-                driver.save_screenshot(os.path.join(RESULTS_DIR, domain))
+                suffix = '_chrome' if driver == self.chrome_driver else '_android'
+                driver.save_screenshot(os.path.join(RESULTS_DIR, ''.join([domain, suffix])))
             except TimeoutException:
                 self.logger.info('Timeout reached for url %s', url)
                 raise UrlUnreachableException
@@ -125,7 +129,6 @@ class MetainfoRetriever(object):
                     find_element_by_xpath("//meta[@name='{0}']".format(meta)).get_attribute('content')
             except NoSuchElementException:
                 self.logger.info('Element %s not found for url %s', meta, url)
-        print metainfo
         return metainfo
 
 
