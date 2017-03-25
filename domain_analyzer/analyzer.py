@@ -39,6 +39,10 @@ class DomainAnalyzer(object):
         time.sleep(DELAY)
 
     def get_domains_to_check(self, domains):
+        """ Check domains by regex and whitelist
+            :param domains: input list of domains
+            :return list of interesting domains to check
+        """
         domains_to_check = []
         for domain in domains:
             if any(regex.match(domain) for regex in REGEX_LIST):
@@ -50,6 +54,9 @@ class DomainAnalyzer(object):
         return domains_to_check
 
     def get_domains_from_page(self):
+        """ Crawl the domainpunch main page to get all .com domains
+            :return list of .com domains on the page
+        """
         # locate the table with domain info and extract its items
         table = self.main_driver.find_element_by_id('domtable')
         table_items = table.find_elements_by_css_selector('td')
@@ -59,6 +66,7 @@ class DomainAnalyzer(object):
         return domains
 
     def move_to_next_page(self):
+        """ Handle pagination. Click on the next page """
         pages = self.main_driver.find_elements_by_xpath('//*[@id="domtable_paginate"]/span/a')
         for page_element in pages:
             # if button is dimmed out
@@ -71,6 +79,7 @@ class DomainAnalyzer(object):
                 break
 
     def run(self):
+        """ Application main loop """
         while True:
             self.logger.info("Getting domain list from main page")
             retrieved_domains = self.get_domains_from_page()
@@ -104,6 +113,9 @@ class MetainfoRetriever(object):
         self.android_driver = Chrome(chrome_options=chrome_options)
 
     def retrieve_info(self, domain):
+        """ Get information on the given domain, write it to the disk
+            :param domain: domain to get info on
+        """
         url = ''.join(['http://', domain])
         self.get_screenshot(url, domain)
         metainfo = self.get_metainfo(url)
@@ -111,6 +123,11 @@ class MetainfoRetriever(object):
             metainfo_file.write(''.join([json.dumps(metainfo), '\n']))
 
     def get_screenshot(self, url, domain):
+        """ Load a given URL using 2 webdrivers and make a screenshot
+            :param url: URL in a valid format
+            :param domain: input domain
+            :raises UrlUnreachableException if timeout is exceeded
+        """
         for driver in [self.chrome_driver, self.android_driver]:
             try:
                 driver.get(url)
@@ -122,6 +139,9 @@ class MetainfoRetriever(object):
                 raise UrlUnreachableException
 
     def get_metainfo(self, url):
+        """ Get title, description, keywords from a given URL
+            :param url: input URL
+        """
         metainfo = {'title': self.chrome_driver.title}
         for meta in ['description', 'keywords']:
             try:
@@ -133,6 +153,7 @@ class MetainfoRetriever(object):
 
 
 def main():
+    """ Application entry point """
     if not os.path.exists(RESULTS_DIR):
         os.mkdir(RESULTS_DIR)
     domain_analyzer = DomainAnalyzer()
