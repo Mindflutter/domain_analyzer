@@ -4,6 +4,8 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import time
 import re
 import logging
+import os
+import json
 
 # Main URL
 DOMAINPUNCH_URL = 'https://domainpunch.com/tlds/daily.php'
@@ -13,18 +15,26 @@ DELAY = 1
 REGEX_LIST = [re.compile('\d.*')]
 # User defined domain whitelist
 WHITELIST = ['google.com', '73ct.com', '73db.com']
+RESULTS_DIR = 'results'
+METAINFO_FILE = os.path.join(RESULTS_DIR, 'metainfo')
 
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s %(message)s',
                     level=logging.INFO)
+
+
+class UrlUnreachableException(Exception):
+    pass
 
 
 class DomainAnalyzer(object):
 
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.metainfo_retriever = MetainfoRetriever()
         self.main_driver = Chrome()
         self.main_driver.set_page_load_timeout(5)
         self.main_driver.get(DOMAINPUNCH_URL)
+        # wait for the page to load
         time.sleep(DELAY)
 
     def get_domains_to_check(self, domains):
@@ -46,19 +56,18 @@ class DomainAnalyzer(object):
 
         # extract domains as a list
         domains = [table_item.text for table_item in table_items if '.com' in table_item.text]
-        print domains
         return domains
 
     def move_to_next_page(self):
         pages = self.main_driver.find_elements_by_xpath('//*[@id="domtable_paginate"]/span/a')
         for page_element in pages:
-            print page_element.text
+            # print page_element.text
             # if button is dimmed out
             if 'ui-state-disabled' in page_element.get_attribute('class'):
                 # get next page element and click on it
                 next_page_index = pages.index(page_element) + 1
                 # On the last page this should give IndexError
-                print 'Moving to page', pages[next_page_index].text
+                self.logger.info("Moving to page %s", pages[next_page_index].text)
                 pages[next_page_index].click()
                 break
 
@@ -70,41 +79,59 @@ class DomainAnalyzer(object):
             to_check = self.get_domains_to_check(retrieved_domains)
             self.logger.info("Domains to check: %s", to_check)
             # ...Metainfo retrieved here...
-            # for domain in to_check:
-            #     url = ''.join(['http://', domain])
-            #     get_metainfo(url)
-            self.logger.info("Moving to next page")
+            for domain in to_check:
+                try:
+                    self.metainfo_retriever.retrieve_info(domain)
+                except UrlUnreachableException:
+                    self.logger.warning("Domain %s unreachable, cannot get metainfo", domain)
+            self.logger.info("Moving on to the next page")
             try:
                 self.move_to_next_page()
             except IndexError:
                 self.logger.info("No more pages to crawl")
+                break
             time.sleep(DELAY)
 
 
 class MetainfoRetriever(object):
+
     def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.chrome_driver = Chrome()
-        self.android_driver = Android()
+        #self.android_driver = Android()
+
+    def retrieve_info(self, domain):
+        url = ''.join(['http://', domain])
+        self.get_screenshot(url, domain)
+        metainfo = self.get_metainfo(url)
+        with open(METAINFO_FILE, 'a') as metainfo_file:
+            metainfo_file.write(''.join([json.dumps(metainfo), '\n']))
+
+    def get_screenshot(self, url, domain):
+        for driver in [self.chrome_driver]:
+            try:
+                driver.get(url)
+                time.sleep(DELAY)
+                driver.save_screenshot(os.path.join(RESULTS_DIR, domain))
+            except TimeoutException:
+                self.logger.info('Timeout reached for url %s', url)
+                raise UrlUnreachableException
 
     def get_metainfo(self, url):
-        try:
-            driver.get(url)
-        except TimeoutException:
-            print 'Timeout reached for url', url
-            return
-        # TODO: screenshot here?
-        metainfo = {'title': driver.title}
+        metainfo = {'title': self.chrome_driver.title}
         for meta in ['description', 'keywords']:
             try:
-                metainfo[meta] = driver.find_element_by_xpath("//meta[@name='{0}']".format(meta)).get_attribute('content')
+                metainfo[meta] = self.chrome_driver.\
+                    find_element_by_xpath("//meta[@name='{0}']".format(meta)).get_attribute('content')
             except NoSuchElementException:
-                print 'Element', meta, 'not found for url', url
-                continue
+                self.logger.info('Element %s not found for url %s', meta, url)
         print metainfo
         return metainfo
 
 
 def main():
+    if not os.path.exists(RESULTS_DIR):
+        os.mkdir(RESULTS_DIR)
     domain_analyzer = DomainAnalyzer()
     domain_analyzer.run()
 
